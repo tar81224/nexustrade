@@ -217,7 +217,7 @@ export default function Settings() {
     const data = {
       profile: { name, email, bio },
       apiKeys: {
-        yahoo: hasApiKey('yahoo') ? '***' : null,
+        finnhub: hasApiKey('finnhub') ? '***' : null,
         news: hasApiKey('news') ? '***' : null,
         openai: hasApiKey('openai') ? '***' : null,
       },
@@ -304,10 +304,10 @@ export default function Settings() {
               >
                 <h2 className="font-display font-semibold text-[24px] text-text-primary mb-4">API Keys</h2>
                 <ApiKeyRow
-                  provider="yahoo"
-                  label="Yahoo Finance API"
-                  helpUrl="https://financeapi.net/"
-                  helpText="Used for real-time stock prices, market data, and portfolio tracking."
+                  provider="finnhub"
+                  label="Finnhub API"
+                  helpUrl="https://finnhub.io/register"
+                  helpText="Used for real-time stock prices, market data, and portfolio tracking. Free tier: 60 calls/minute."
                 />
                 <ApiKeyRow
                   provider="news"
@@ -378,7 +378,7 @@ export default function Settings() {
                 </div>
 
                 <div className="pt-4 border-t border-border-subtle flex items-center gap-3">
-                  <button onClick={saveProfile} className="gradient-btn">
+                  <button onClick={saveProfile} className="px-4 py-2.5 rounded-lg bg-accent-electric-dim text-accent-electric text-[13px] font-medium hover:bg-accent-electric hover:text-deep-void transition-all">
                     Save Changes
                   </button>
                   {profileSaved && (
