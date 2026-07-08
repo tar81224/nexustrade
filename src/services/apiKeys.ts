@@ -1,10 +1,10 @@
 const STORAGE_KEYS = {
-  yahoo: 'nexustrade_api_yahoo',
+  finnhub: 'nexustrade_api_finnhub',
   news: 'nexustrade_api_news',
   openai: 'nexustrade_api_openai',
 } as const;
 
-export type ApiProvider = keyof typeof STORAGE_KEYS;
+export type ApiProvider = 'finnhub' | 'news' | 'openai';
 
 export function getApiKey(provider: ApiProvider): string | null {
   return localStorage.getItem(STORAGE_KEYS[provider]);
@@ -19,5 +19,14 @@ export function removeApiKey(provider: ApiProvider): void {
 }
 
 export function hasApiKey(provider: ApiProvider): boolean {
-  return !!getApiKey(provider);
+  const key = getApiKey(provider);
+  return !!key && key.length > 0;
+}
+
+export function getAllApiKeys(): Record<ApiProvider, string | null> {
+  return {
+    finnhub: getApiKey('finnhub'),
+    news: getApiKey('news'),
+    openai: getApiKey('openai'),
+  };
 }
