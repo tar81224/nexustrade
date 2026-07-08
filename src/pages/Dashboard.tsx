@@ -20,6 +20,7 @@ import {
   Plus,
   X,
   ArrowUpDown,
+  Loader2,
 } from 'lucide-react';
 import {
   getPortfolioData,
@@ -34,9 +35,10 @@ const TIMEFRAMES = ['1D', '1W', '1M', '3M', '1Y'] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
 
 function MiniSparkline({ positive }: { positive: boolean }) {
-  const data = Array.from({ length: 10 }, () =>
-    50 + (positive ? 1 : -1) * Math.random() * 30
-  );
+  // Deterministic sparkline data (no random)
+  const data = positive
+    ? [50, 48, 52, 55, 53, 58, 60, 57, 62, 65]
+    : [65, 62, 57, 60, 58, 53, 55, 52, 48, 50];
   return (
     <div className="w-16 h-8">
       <ResponsiveContainer width="100%" height="100%">
@@ -92,22 +94,41 @@ export default function Dashboard() {
   const [showAddInput, setShowAddInput] = useState(false);
   const [addTicker, setAddTicker] = useState('');
 
+  // Loading states for refresh buttons
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [signalsLoading, setSignalsLoading] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+
+  const withSpinner = useCallback(
+    (refreshFn: () => void, setLoading: (v: boolean) => void) => {
+      setLoading(true);
+      setTimeout(() => {
+        refreshFn();
+        setLoading(false);
+      }, 500);
+    },
+    []
+  );
+
   const refreshPortfolio = useCallback(() => {
-    setPortfolio(getPortfolioData());
-    setChartData(getPortfolioPerformance(timeframe));
-  }, [timeframe]);
+    withSpinner(() => {
+      setPortfolio(getPortfolioData());
+      setChartData(getPortfolioPerformance(timeframe));
+    }, setPortfolioLoading);
+  }, [timeframe, withSpinner]);
 
   const refreshSignals = useCallback(() => {
-    setSignals(getAISignals());
-  }, []);
+    withSpinner(() => setSignals(getAISignals()), setSignalsLoading);
+  }, [withSpinner]);
 
   const refreshMarket = useCallback(() => {
-    setMarketIndices(getMarketOverview());
-  }, []);
+    withSpinner(() => setMarketIndices(getMarketOverview()), setMarketLoading);
+  }, [withSpinner]);
 
   const refreshWatchlist = useCallback(() => {
-    setWatchlist(getWatchlist());
-  }, []);
+    withSpinner(() => setWatchlist(getWatchlist()), setWatchlistLoading);
+  }, [withSpinner]);
 
   useEffect(() => {
     setChartData(getPortfolioPerformance(timeframe));
@@ -160,15 +181,15 @@ export default function Dashboard() {
       ticker,
       company: ticker,
       sector: 'Unknown',
-      price: 100 + Math.random() * 200,
-      change: (Math.random() - 0.5) * 10,
-      changePct: (Math.random() - 0.5) * 5,
+      price: 100,
+      change: 0,
+      changePct: 0,
       volume: '1.2M',
       marketCap: '50B',
       marketCapCategory: 'Mid',
-      aiScore: Math.floor(Math.random() * 40) + 50,
-      signal: Math.random() > 0.5 ? 'Buy' : 'Hold',
-      sparkline: Array.from({ length: 10 }, () => 50 + Math.random() * 30),
+      aiScore: 50,
+      signal: 'Hold',
+      sparkline: [50, 52, 51, 54, 53, 56, 55, 58, 57, 60],
     };
     setWatchlist((prev) => [...prev, newStock]);
     setAddTicker('');
@@ -180,10 +201,42 @@ export default function Dashboard() {
   };
 
   const summaryCards = [
-    { label: 'Total Value', value: `$${portfolio.totalValue.toLocaleString()}`, change: `${portfolio.dayGain >= 0 ? '+' : ''}$${portfolio.dayGain.toFixed(0)}`, positive: portfolio.dayGain >= 0, icon: DollarSign, onRefresh: refreshPortfolio },
-    { label: 'Day Gain/Loss', value: `${portfolio.dayGain >= 0 ? '+' : ''}$${portfolio.dayGain.toFixed(0)}`, change: `${portfolio.dayGainPct >= 0 ? '+' : ''}${portfolio.dayGainPct.toFixed(2)}%`, positive: portfolio.dayGain >= 0, icon: portfolio.dayGain >= 0 ? TrendingUp : TrendingDown, onRefresh: refreshPortfolio },
-    { label: 'Buying Power', value: `$${portfolio.buyingPower.toLocaleString()}`, change: '', positive: true, icon: Activity, onRefresh: refreshPortfolio },
-    { label: 'AI Signals', value: `${portfolio.aiSignalsActive} Active`, change: 'Buy signals', positive: true, icon: Zap, onRefresh: refreshSignals },
+    {
+      label: 'Total Value',
+      value: `$${portfolio.totalValue.toLocaleString()}`,
+      change: `${portfolio.dayGain >= 0 ? '+' : ''}$${portfolio.dayGain.toFixed(0)}`,
+      positive: portfolio.dayGain >= 0,
+      icon: DollarSign,
+      onRefresh: refreshPortfolio,
+      loading: portfolioLoading,
+    },
+    {
+      label: 'Day Gain/Loss',
+      value: `${portfolio.dayGain >= 0 ? '+' : ''}$${portfolio.dayGain.toFixed(0)}`,
+      change: `${portfolio.dayGainPct >= 0 ? '+' : ''}${portfolio.dayGainPct.toFixed(2)}%`,
+      positive: portfolio.dayGain >= 0,
+      icon: portfolio.dayGain >= 0 ? TrendingUp : TrendingDown,
+      onRefresh: refreshPortfolio,
+      loading: portfolioLoading,
+    },
+    {
+      label: 'Buying Power',
+      value: `$${portfolio.buyingPower.toLocaleString()}`,
+      change: '',
+      positive: true,
+      icon: Activity,
+      onRefresh: refreshPortfolio,
+      loading: portfolioLoading,
+    },
+    {
+      label: 'AI Signals',
+      value: `${portfolio.aiSignalsActive} Active`,
+      change: 'Buy signals',
+      positive: true,
+      icon: Zap,
+      onRefresh: refreshSignals,
+      loading: signalsLoading,
+    },
   ];
 
   return (
@@ -207,10 +260,15 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={card.onRefresh}
-                    className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+                    disabled={card.loading}
+                    className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
                     title="Refresh"
                   >
-                    <RefreshCw size={12} />
+                    {card.loading ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={12} />
+                    )}
                   </button>
                   <Icon size={16} className="text-text-muted" />
                 </div>
@@ -321,10 +379,15 @@ export default function Dashboard() {
             </div>
             <button
               onClick={refreshSignals}
-              className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+              disabled={signalsLoading}
+              className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
               title="Refresh Signals"
             >
-              <RefreshCw size={14} />
+              {signalsLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
             </button>
           </div>
           <div className="flex-1 overflow-y-auto max-h-[400px] scrollbar-thin">
@@ -407,9 +470,14 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <button
                 onClick={refreshWatchlist}
-                className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+                disabled={watchlistLoading}
+                className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
               >
-                <RefreshCw size={14} />
+                {watchlistLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
               </button>
               {!showAddInput ? (
                 <button
@@ -524,9 +592,14 @@ export default function Dashboard() {
             </h3>
             <button
               onClick={refreshMarket}
-              className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+              disabled={marketLoading}
+              className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
             >
-              <RefreshCw size={14} />
+              {marketLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
             </button>
           </div>
           <div className="p-5 space-y-4">
