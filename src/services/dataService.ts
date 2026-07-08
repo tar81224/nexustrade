@@ -354,16 +354,16 @@ let marketIndices: MarketIndex[] = [
 
 /* ────────────────────── helpers ────────────────────── */
 
-function checkApiKey(provider: 'yahoo' | 'news' | 'openai', functionName: string): void {
+function checkApiKey(provider: 'finnhub' | 'news' | 'openai', functionName: string): void {
   if (hasApiKey(provider)) {
-    console.log(`[${functionName}] Would call API with key: ${hasApiKey(provider) ? '***' : 'none'}`);
+    console.log(`[${functionName}] Would call ${provider} API with key: ***`);
   }
 }
 
 /* ────────────────────── exported functions ────────────────────── */
 
 export function getMarketOverview(): MarketIndex[] {
-  checkApiKey('yahoo', 'getMarketOverview');
+  checkApiKey('finnhub', 'getMarketOverview');
   return marketIndices.map((m) => ({
     ...m,
     value: m.value + (Math.random() - 0.5) * 5,
@@ -380,7 +380,7 @@ export function getPortfolioData(): {
   buyingPower: number;
   aiSignalsActive: number;
 } {
-  checkApiKey('yahoo', 'getPortfolioData');
+  checkApiKey('finnhub', 'getPortfolioData');
   const holdings = PORTFOLIO_HOLDINGS.map((h) => ({
     ...h,
     currentPrice: h.ticker === 'CASH' ? 1 : h.currentPrice + (Math.random() - 0.5) * 2,
@@ -400,7 +400,7 @@ export function getPortfolioData(): {
 }
 
 export function getWatchlist(): Stock[] {
-  checkApiKey('yahoo', 'getWatchlist');
+  checkApiKey('finnhub', 'getWatchlist');
   const watchlistTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'AMD', 'NFLX', 'LLY'];
   return watchlistTickers
     .map((t) => ALL_STOCKS.find((s) => s.ticker === t)!)
@@ -413,7 +413,7 @@ export function getWatchlist(): Stock[] {
 }
 
 export function getStockData(ticker?: string): Stock[] {
-  checkApiKey('yahoo', 'getStockData');
+  checkApiKey('finnhub', 'getStockData');
   if (ticker) {
     const found = ALL_STOCKS.find((s) => s.ticker.toLowerCase() === ticker.toLowerCase());
     return found ? [found] : [];
@@ -449,7 +449,7 @@ export function getAISignals(): AISignal[] {
 }
 
 export function getScreenedStocks(filters: ScreenerFilters = {}): Stock[] {
-  checkApiKey('yahoo', 'getScreenedStocks');
+  checkApiKey('finnhub', 'getScreenedStocks');
   let result = [...ALL_STOCKS];
 
   if (filters.search) {
@@ -475,7 +475,7 @@ export function getScreenedStocks(filters: ScreenerFilters = {}): Stock[] {
 }
 
 export function getTransactions(typeFilter?: string): Transaction[] {
-  checkApiKey('yahoo', 'getTransactions');
+  checkApiKey('finnhub', 'getTransactions');
   if (typeFilter && typeFilter !== 'All') {
     return TRANSACTIONS.filter((t) => t.type === typeFilter);
   }
