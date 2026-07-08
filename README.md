@@ -9,7 +9,7 @@ AI-powered personal stock trading assistant with real-time market data, news ana
 - **Stock Screener** — Advanced filters (sector, market cap, AI score, signal), sortable table/grid views
 - **Portfolio Management** — Holdings, performance vs S&P 500, allocation charts, transactions, AI insights
 - **AI Advisor** — Chat interface for stock analysis, comparisons, portfolio review, market outlook
-- **Settings** — API key management (Yahoo Finance, NewsAPI, OpenAI), profile, notifications, preferences
+- **Settings** — API key management (Finnhub, NewsAPI, OpenAI), profile, notifications, preferences
 
 ## Tech Stack
 
@@ -36,11 +36,11 @@ npm run build
 
 The app works out of the box with realistic mock data. To connect to live data, add your API keys in **Settings → API Keys**:
 
-| Service | Purpose | Get Key |
-|---------|---------|---------|
-| Yahoo Finance | Stock prices & market data | [financeapi.net](https://financeapi.net) |
-| NewsAPI | Live financial news | [newsapi.org](https://newsapi.org) |
-| OpenAI | AI summaries & insights | [platform.openai.com](https://platform.openai.com) |
+| Service | Purpose | Get Key | Free Tier |
+|---------|---------|---------|-----------|
+| **Finnhub** | Real-time stock prices, market data, earnings, fundamentals | [finnhub.io/register](https://finnhub.io/register) | 60 calls/minute |
+| **NewsAPI** | Live financial news and market analysis | [newsapi.org](https://newsapi.org) | 100 requests/day |
+| **OpenAI** | AI advisor chat, news summarization, portfolio insights | [platform.openai.com](https://platform.openai.com/api-keys) | Pay-as-you-go |
 
 API keys are stored in your browser's localStorage and never leave your device.
 
