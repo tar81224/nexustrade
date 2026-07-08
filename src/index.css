@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --deep-void: #060B14;
+    --surface-glass: rgba(10, 16, 30, 0.72);
+    --surface-elevated: #0D1525;
+    --surface-hover: #141F35;
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --accent-electric: #00F0FF;
+    --accent-electric-dim: rgba(0, 240, 255, 0.12);
+    --accent-purple: #8B5CF6;
+    --accent-purple-dim: rgba(139, 92, 246, 0.12);
+    --gain-green: #10B981;
+    --gain-green-dim: rgba(16, 185, 129, 0.12);
+    --loss-red: #EF4444;
+    --border-subtle: rgba(148, 163, 184, 0.08);
+    --border-active: rgba(0, 240, 255, 0.25);
+    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+    --shadow-elevated: 0 8px 40px rgba(0, 0, 0, 0.4);
+
+    --background: 220 30% 5%;
+    --foreground: 210 40% 96%;
+    --card: 220 30% 5%;
+    --card-foreground: 210 40% 96%;
+    --popover: 220 30% 5%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 186 100% 50%;
+    --primary-foreground: 220 30% 5%;
+    --secondary: 220 25% 10%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 220 25% 10%;
+    --muted-foreground: 215 16% 57%;
+    --accent: 220 25% 10%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 96%;
+    --border: 215 16% 57% / 0.08;
+    --input: 220 25% 10%;
+    --ring: 186 100% 50%;
+    --radius: 0.625rem;
+  }
+
+  body {
+    background-color: var(--deep-void);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    @apply border-border-subtle;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(10, 16, 30, 0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-panel {
+    background: rgba(6, 11, 20, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #00F0FF 0%, #8B5CF6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glow-border {
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    box-shadow: 0 0 24px rgba(0, 240, 255, 0.2);
+  }
+}
