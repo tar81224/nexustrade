@@ -14,18 +14,57 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { TrendingUp, AlertTriangle, Lightbulb, Shield, X, Plus, Minus } from 'lucide-react';
-import { getPortfolioData, getPortfolioPerformance, getTransactions, getSectorAllocation, getStockAllocation } from '@/services/dataService';
+import {
+  TrendingUp,
+  AlertTriangle,
+  Lightbulb,
+  Shield,
+  X,
+  Plus,
+  Pencil,
+  Trash2,
+  Package,
+  Loader2,
+} from 'lucide-react';
+import {
+  getPortfolioData,
+  getPortfolioPerformance,
+  getTransactions,
+  getSectorAllocation,
+  getStockAllocation,
+  ALL_STOCKS,
+} from '@/services/dataService';
+import {
+  addPosition,
+  updatePosition,
+  removePosition,
+  clearAllPositions,
+  isDemoData,
+  hasUserModifiedPortfolio,
+} from '@/services/portfolioStore';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 type Tab = 'Holdings' | 'Performance' | 'Allocation' | 'Transactions' | 'AI Insights';
 const TABS: Tab[] = ['Holdings', 'Performance', 'Allocation', 'Transactions', 'AI Insights'];
 
-interface ModalState {
+type ModalMode = 'add' | 'edit' | null;
+
+interface PositionModalState {
   open: boolean;
-  type: 'Buy' | 'Sell' | null;
+  mode: ModalMode;
   ticker: string;
-  shares: number;
-  price: number;
+  shares: string;
+  avgCost: string;
+  error: string;
 }
 
 const aiInsights = [
@@ -62,7 +101,7 @@ const aiInsights = [
   {
     type: 'risk' as const,
     title: 'Cash Deployment Opportunity',
-    description: 'You have $18,500 in cash (7% of portfolio). With the Fed signaling rate cuts, now may be a good time to deploy into high-quality dividend stocks like V and MA.',
+    description: 'You have $10,000 in buying power. With the Fed signaling rate cuts, now may be a good time to deploy into high-quality dividend stocks like V and MA.',
     confidence: 75,
     icon: Shield,
     color: 'var(--accent-purple)',
@@ -76,34 +115,108 @@ export default function Portfolio() {
   const [portfolio, setPortfolio] = useState(() => getPortfolioData());
   const [perfTimeframe, setPerfTimeframe] = useState('1M');
   const [txFilter, setTxFilter] = useState('All');
-  const [modal, setModal] = useState<ModalState>({ open: false, type: null, ticker: '', shares: 0, price: 0 });
   const [dismissedInsights, setDismissedInsights] = useState<Set<number>>(new Set());
+  const [demoBadgeVisible, setDemoBadgeVisible] = useState(true);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+
+  // Position modal state
+  const [modal, setModal] = useState<PositionModalState>({
+    open: false,
+    mode: null,
+    ticker: '',
+    shares: '',
+    avgCost: '',
+    error: '',
+  });
 
   const refreshPortfolio = useCallback(() => {
-    setPortfolio(getPortfolioData());
+    setPortfolioLoading(true);
+    setTimeout(() => {
+      setPortfolio(getPortfolioData());
+      setPortfolioLoading(false);
+    }, 500);
   }, []);
 
   const perfData = useMemo(() => getPortfolioPerformance(perfTimeframe), [perfTimeframe]);
   const transactions = useMemo(() => getTransactions(txFilter), [txFilter]);
-  const sectorAllocation = useMemo(() => getSectorAllocation(), []);
-  const stockAllocation = useMemo(() => getStockAllocation(), []);
+  const sectorAllocation = useMemo(() => getSectorAllocation(), [portfolio.holdings.length]);
+  const stockAllocation = useMemo(() => getStockAllocation(), [portfolio.holdings.length]);
 
-  const openModal = (type: 'Buy' | 'Sell', ticker: string, price: number) => {
-    setModal({ open: true, type, ticker, shares: 0, price });
+  // ---- Modal helpers ----
+
+  const openAddModal = () => {
+    setModal({ open: true, mode: 'add', ticker: '', shares: '', avgCost: '', error: '' });
+  };
+
+  const openEditModal = (ticker: string, shares: number, avgCost: number) => {
+    setModal({
+      open: true,
+      mode: 'edit',
+      ticker,
+      shares: shares.toString(),
+      avgCost: avgCost.toFixed(2),
+      error: '',
+    });
   };
 
   const closeModal = () => {
-    setModal({ open: false, type: null, ticker: '', shares: 0, price: 0 });
+    setModal((prev) => ({ ...prev, open: false, mode: null, error: '' }));
   };
 
-  const handleConfirmTrade = () => {
-    if (modal.shares <= 0) return;
-    // In a real app, this would call an API to execute the trade
+  const handleModalSubmit = () => {
+    const ticker = modal.ticker.trim().toUpperCase();
+    const sharesNum = parseInt(modal.shares, 10);
+    const avgCostNum = parseFloat(modal.avgCost);
+
+    if (!ticker) {
+      setModal((prev) => ({ ...prev, error: 'Please enter a ticker symbol.' }));
+      return;
+    }
+    if (!sharesNum || sharesNum <= 0) {
+      setModal((prev) => ({ ...prev, error: 'Shares must be greater than 0.' }));
+      return;
+    }
+
+    // Validate ticker exists in ALL_STOCKS
+    const stock = ALL_STOCKS.find((s) => s.ticker.toUpperCase() === ticker);
+    if (!stock) {
+      setModal((prev) => ({ ...prev, error: `Ticker "${ticker}" not found in stock database.` }));
+      return;
+    }
+
+    const cost = isNaN(avgCostNum) || avgCostNum <= 0 ? stock.price : avgCostNum;
+
+    if (modal.mode === 'add') {
+      addPosition(ticker, sharesNum, cost);
+    } else if (modal.mode === 'edit') {
+      updatePosition(ticker, sharesNum, cost);
+    }
+
     closeModal();
     refreshPortfolio();
   };
 
+  const handleRemove = (ticker: string) => {
+    if (confirm(`Remove ${ticker} from your portfolio?`)) {
+      removePosition(ticker);
+      refreshPortfolio();
+    }
+  };
+
+  const handleClearAll = () => {
+    setClearConfirmOpen(true);
+  };
+
+  const confirmClearAll = () => {
+    clearAllPositions();
+    setClearConfirmOpen(false);
+    setDemoBadgeVisible(false);
+    refreshPortfolio();
+  };
+
   const filteredInsights = aiInsights.filter((_, i) => !dismissedInsights.has(i));
+  const showDemoBadge = isDemoData() && demoBadgeVisible;
 
   const totalPortfolioValue = portfolio.holdings.reduce((s, h) => s + h.totalValue, 0);
 
@@ -119,17 +232,33 @@ export default function Portfolio() {
         <h1 className="font-display font-semibold text-[32px] text-text-primary">
           Portfolio
         </h1>
-        <div className="flex items-center gap-4 mt-2">
+        <div className="flex items-center gap-4 mt-2 flex-wrap">
           <span className="font-mono text-[28px] text-text-primary">
             ${totalPortfolioValue.toLocaleString()}
           </span>
           <span className="font-mono text-[13px] text-gain-green">+18.4% YTD</span>
           <button
             onClick={refreshPortfolio}
-            className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+            disabled={portfolioLoading}
+            className="p-1.5 rounded hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
           >
-            <TrendingUp size={14} />
+            {portfolioLoading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <TrendingUp size={14} />
+            )}
           </button>
+          {showDemoBadge && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent-electric-dim text-accent-electric text-[11px] font-medium">
+              Demo Data
+              <button
+                onClick={() => setDemoBadgeVisible(false)}
+                className="hover:text-text-primary transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
         </div>
       </motion.div>
 
@@ -165,84 +294,141 @@ export default function Portfolio() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="glass-card overflow-hidden"
           >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border-subtle">
-                    <th className="data-table-header text-left">Ticker</th>
-                    <th className="data-table-header text-right">Shares</th>
-                    <th className="data-table-header text-right">Avg Cost</th>
-                    <th className="data-table-header text-right">Price</th>
-                    <th className="data-table-header text-right">Total Value</th>
-                    <th className="data-table-header text-right">P&L</th>
-                    <th className="data-table-header text-right">P&L %</th>
-                    <th className="data-table-header text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {portfolio.holdings.map((h) => (
-                    <tr key={h.ticker} className="data-table-row">
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-[13px] font-medium text-text-primary">{h.ticker}</span>
-                        <span className="block font-mono text-[10px] text-text-muted">{h.sector}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[13px] text-text-primary">{h.shares}</td>
-                      <td className="py-3 px-4 text-right font-mono text-[13px] text-text-secondary">
-                        {h.avgCost > 0 ? `$${h.avgCost.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[13px] text-text-primary">
-                        {h.currentPrice > 1 ? `$${h.currentPrice.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[13px] text-text-primary">
-                        ${h.totalValue.toLocaleString()}
-                      </td>
-                      <td className={`py-3 px-4 text-right font-mono text-[13px] ${h.pl >= 0 ? 'text-gain-green' : 'text-loss-red'}`}>
-                        {h.pl >= 0 ? '+' : ''}{h.pl > 0 ? `$${h.pl.toLocaleString()}` : '-'}
-                      </td>
-                      <td className={`py-3 px-4 text-right font-mono text-[13px] ${h.plPct > 0 ? 'text-gain-green' : h.plPct < 0 ? 'text-loss-red' : 'text-text-muted'}`}>
-                        {h.plPct > 0 ? '+' : ''}{h.plPct.toFixed(1)}%
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-1">
-                          {h.ticker !== 'CASH' && h.currentPrice > 1 && (
-                            <>
-                              <button
-                                onClick={() => openModal('Buy', h.ticker, h.currentPrice)}
-                                className="p-1.5 rounded hover:bg-gain-green-dim text-text-muted hover:text-gain-green transition-colors"
-                                title="Buy"
-                              >
-                                <Plus size={14} />
-                              </button>
-                              <button
-                                onClick={() => openModal('Sell', h.ticker, h.currentPrice)}
-                                className="p-1.5 rounded hover:bg-[rgba(239,68,68,0.12)] text-text-muted hover:text-loss-red transition-colors"
-                                title="Sell"
-                              >
-                                <Minus size={14} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {/* Totals Row */}
-                  <tr className="border-t-2 border-border-subtle bg-surface-elevated">
-                    <td className="py-3 px-4 font-mono text-[13px] font-medium text-text-primary">TOTAL</td>
-                    <td colSpan={3} />
-                    <td className="py-3 px-4 text-right font-mono text-[13px] font-bold text-text-primary">
-                      ${totalPortfolioValue.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-[13px] text-gain-green">
-                      +${portfolio.holdings.filter(h => h.ticker !== 'CASH').reduce((s, h) => s + h.pl, 0).toLocaleString()}
-                    </td>
-                    <td colSpan={2} />
-                  </tr>
-                </tbody>
-              </table>
+            {/* Toolbar */}
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h3 className="font-display font-semibold text-[18px] text-text-primary">
+                Your Positions
+              </h3>
+              <div className="flex items-center gap-2">
+                {portfolio.holdings.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearAll}
+                    className="text-[12px] font-medium border-border-subtle text-text-muted hover:text-loss-red hover:border-loss-red"
+                  >
+                    <Trash2 size={13} className="mr-1" />
+                    Clear All
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={openAddModal}
+                  className="text-[12px] font-medium bg-accent-electric text-deep-void hover:bg-accent-electric/90"
+                >
+                  <Plus size={13} className="mr-1" />
+                  Add Position
+                </Button>
+              </div>
             </div>
+
+            {portfolio.holdings.length === 0 ? (
+              /* Empty state */
+              <div className="glass-card p-12 text-center">
+                <Package size={48} className="mx-auto mb-4 text-text-muted opacity-50" />
+                <h3 className="font-display font-semibold text-[18px] text-text-primary mb-2">
+                  Your portfolio is empty
+                </h3>
+                <p className="text-body-sm text-text-muted mb-6">
+                  Add your first position above to start tracking your investments.
+                </p>
+                <Button
+                  onClick={openAddModal}
+                  className="bg-accent-electric text-deep-void hover:bg-accent-electric/90"
+                >
+                  <Plus size={16} className="mr-1" />
+                  Add Position
+                </Button>
+              </div>
+            ) : (
+              <div className="glass-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border-subtle">
+                        <th className="data-table-header text-left">Ticker</th>
+                        <th className="data-table-header text-left">Company</th>
+                        <th className="data-table-header text-right">Shares</th>
+                        <th className="data-table-header text-right">Avg Cost</th>
+                        <th className="data-table-header text-right">Current Price</th>
+                        <th className="data-table-header text-right">Total Value</th>
+                        <th className="data-table-header text-right">P&L ($)</th>
+                        <th className="data-table-header text-right">P&L (%)</th>
+                        <th className="data-table-header text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {portfolio.holdings.map((h) => (
+                        <tr key={h.ticker} className="data-table-row">
+                          <td className="py-3 px-4">
+                            <span className="font-mono text-[13px] font-medium text-text-primary">
+                              {h.ticker}
+                            </span>
+                            <span className="block font-mono text-[10px] text-text-muted">
+                              {h.sector}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-[12px] text-text-secondary">
+                              {h.company}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-[13px] text-text-primary">
+                            {h.shares}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-[13px] text-text-secondary">
+                            {h.avgCost > 0 ? `$${h.avgCost.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-[13px] text-text-primary">
+                            {h.currentPrice > 0 ? `$${h.currentPrice.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-[13px] text-text-primary">
+                            ${h.totalValue.toLocaleString()}
+                          </td>
+                          <td className={`py-3 px-4 text-right font-mono text-[13px] ${h.pl >= 0 ? 'text-gain-green' : 'text-loss-red'}`}>
+                            {h.pl >= 0 ? '+' : ''}{h.pl !== 0 ? `$${h.pl.toLocaleString()}` : '-'}
+                          </td>
+                          <td className={`py-3 px-4 text-right font-mono text-[13px] ${h.plPct > 0 ? 'text-gain-green' : h.plPct < 0 ? 'text-loss-red' : 'text-text-muted'}`}>
+                            {h.plPct > 0 ? '+' : ''}{h.plPct.toFixed(1)}%
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => openEditModal(h.ticker, h.shares, h.avgCost)}
+                                className="p-1.5 rounded hover:bg-accent-electric-dim text-text-muted hover:text-accent-electric transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleRemove(h.ticker)}
+                                className="p-1.5 rounded hover:bg-[rgba(239,68,68,0.12)] text-text-muted hover:text-loss-red transition-colors"
+                                title="Remove"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Totals Row */}
+                      <tr className="border-t-2 border-border-subtle bg-surface-elevated">
+                        <td className="py-3 px-4 font-mono text-[13px] font-medium text-text-primary">TOTAL</td>
+                        <td colSpan={4} />
+                        <td className="py-3 px-4 text-right font-mono text-[13px] font-bold text-text-primary">
+                          ${totalPortfolioValue.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-[13px] text-gain-green">
+                          +${portfolio.holdings.reduce((s, h) => s + h.pl, 0).toLocaleString()}
+                        </td>
+                        <td colSpan={2} />
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -431,9 +617,16 @@ export default function Portfolio() {
             className="glass-card overflow-hidden"
           >
             <div className="p-4 border-b border-border-subtle flex items-center justify-between flex-wrap gap-3">
-              <h3 className="font-display font-semibold text-[18px] text-text-primary">
-                Transaction History
-              </h3>
+              <div>
+                <h3 className="font-display font-semibold text-[18px] text-text-primary">
+                  Transaction History
+                </h3>
+                {hasUserModifiedPortfolio() && (
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    Transactions are auto-generated from your portfolio positions.
+                  </p>
+                )}
+              </div>
               <div className="flex gap-1 bg-surface-elevated rounded-full p-1">
                 {['All', 'Buy', 'Sell', 'Dividend'].map((type) => (
                   <button
@@ -571,78 +764,126 @@ export default function Portfolio() {
         )}
       </AnimatePresence>
 
-      {/* Buy/Sell Modal */}
-      <AnimatePresence>
-        {modal.open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-            onClick={closeModal}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass-card p-6 w-full max-w-[400px]"
+      {/* ─── Add/Edit Position Dialog ─── */}
+      <Dialog open={modal.open} onOpenChange={(open) => { if (!open) closeModal(); }}>
+        <DialogContent className="sm:max-w-[420px] bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
+          <DialogHeader>
+            <DialogTitle className="text-text-primary font-display">
+              {modal.mode === 'add' ? 'Add Position' : `Edit ${modal.ticker}`}
+            </DialogTitle>
+            <DialogDescription className="text-text-muted text-[13px]">
+              {modal.mode === 'add'
+                ? 'Enter a ticker symbol, number of shares, and average cost per share.'
+                : 'Update the number of shares and average cost for this position.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {modal.mode === 'add' && (
+              <div>
+                <label className="block font-mono text-[11px] text-text-muted uppercase tracking-wider mb-1.5">
+                  Ticker Symbol
+                </label>
+                <Input
+                  value={modal.ticker}
+                  onChange={(e) => setModal((prev) => ({ ...prev, ticker: e.target.value.toUpperCase(), error: '' }))}
+                  placeholder="e.g. TSLA"
+                  className="font-mono bg-[var(--surface-glass)] border-[var(--border-subtle)] text-text-primary"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block font-mono text-[11px] text-text-muted uppercase tracking-wider mb-1.5">
+                Shares
+              </label>
+              <Input
+                type="number"
+                min={1}
+                value={modal.shares}
+                onChange={(e) => setModal((prev) => ({ ...prev, shares: e.target.value, error: '' }))}
+                placeholder="Number of shares..."
+                className="font-mono bg-[var(--surface-glass)] border-[var(--border-subtle)] text-text-primary"
+                autoFocus={modal.mode === 'edit'}
+              />
+            </div>
+
+            <div>
+              <label className="block font-mono text-[11px] text-text-muted uppercase tracking-wider mb-1.5">
+                Avg Cost per Share
+              </label>
+              <Input
+                type="number"
+                min={0.01}
+                step={0.01}
+                value={modal.avgCost}
+                onChange={(e) => setModal((prev) => ({ ...prev, avgCost: e.target.value, error: '' }))}
+                placeholder="Leave blank to use current price"
+                className="font-mono bg-[var(--surface-glass)] border-[var(--border-subtle)] text-text-primary"
+              />
+              <p className="text-[11px] text-text-muted mt-1">
+                {modal.mode === 'add' && modal.ticker
+                  ? (() => {
+                      const stock = ALL_STOCKS.find((s) => s.ticker === modal.ticker.toUpperCase());
+                      return stock ? `Current price: $${stock.price.toFixed(2)}` : '';
+                    })()
+                  : ''}
+                {modal.mode === 'add' && !modal.ticker && 'Will default to current market price if left blank.'}
+              </p>
+            </div>
+
+            {modal.error && (
+              <p className="text-[13px] text-loss-red font-medium">{modal.error}</p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={closeModal}
+              className="border-[var(--border-subtle)] text-text-muted hover:text-text-primary hover:bg-[var(--surface-hover)]"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-display font-semibold text-[20px] text-text-primary">
-                  {modal.type} {modal.ticker}
-                </h3>
-                <button onClick={closeModal} className="p-1 rounded hover:bg-surface-hover text-text-muted">
-                  <X size={18} />
-                </button>
-              </div>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleModalSubmit}
+              className="bg-accent-electric text-deep-void hover:bg-accent-electric/90"
+            >
+              {modal.mode === 'add' ? 'Add Position' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-              <div className="space-y-4">
-                <div className="flex justify-between text-body-sm">
-                  <span className="text-text-muted">Current Price</span>
-                  <span className="font-mono text-text-primary">${modal.price.toFixed(2)}</span>
-                </div>
-
-                <div>
-                  <label className="block font-mono text-[11px] text-text-muted uppercase tracking-wider mb-1.5">
-                    Number of Shares
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={modal.shares || ''}
-                    onChange={(e) => setModal(prev => ({ ...prev, shares: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2.5 rounded-lg bg-surface-elevated border border-border-subtle text-text-primary text-body-sm focus:outline-none focus:border-border-active transition-colors"
-                    placeholder="Enter shares..."
-                    autoFocus
-                  />
-                </div>
-
-                <div className="flex justify-between text-body-sm pt-2 border-t border-border-subtle">
-                  <span className="text-text-muted">Estimated Total</span>
-                  <span className="font-mono text-[18px] text-text-primary">
-                    ${(modal.shares * modal.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <button
-                  onClick={handleConfirmTrade}
-                  disabled={modal.shares <= 0}
-                  className={`w-full py-3 rounded-xl font-medium text-body-sm transition-all ${
-                    modal.shares > 0
-                      ? modal.type === 'Buy'
-                        ? 'bg-gain-green text-deep-void hover:opacity-90'
-                        : 'bg-loss-red text-white hover:opacity-90'
-                      : 'bg-surface-hover text-text-muted cursor-not-allowed'
-                  }`}
-                >
-                  Confirm {modal.type}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ─── Clear All Confirmation Dialog ─── */}
+      <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
+          <DialogHeader>
+            <DialogTitle className="text-text-primary font-display">Clear All Positions</DialogTitle>
+            <DialogDescription className="text-text-muted text-[13px]">
+              This will remove all positions from your portfolio. Demo data will not reappear.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setClearConfirmOpen(false)}
+              className="border-[var(--border-subtle)] text-text-muted hover:text-text-primary hover:bg-[var(--surface-hover)]"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmClearAll}
+              className="bg-loss-red text-white hover:bg-loss-red/90"
+            >
+              <Trash2 size={14} className="mr-1" />
+              Clear All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
