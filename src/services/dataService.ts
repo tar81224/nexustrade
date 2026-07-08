@@ -1,4 +1,5 @@
 import { hasApiKey } from './apiKeys';
+import { getUserPortfolio, hasUserModifiedPortfolio } from './portfolioStore';
 
 /* ────────────────────── types ────────────────────── */
 
@@ -20,6 +21,7 @@ export interface Stock {
 
 export interface PortfolioHolding {
   ticker: string;
+  company: string;
   shares: number;
   avgCost: number;
   currentPrice: number;
@@ -81,7 +83,7 @@ export interface ScreenerFilters {
 
 /* ────────────────────── 20+ stocks ────────────────────── */
 
-const ALL_STOCKS: Stock[] = [
+export const ALL_STOCKS: Stock[] = [
   { ticker: 'AAPL', company: 'Apple Inc', sector: 'Technology', price: 195.64, change: 2.34, changePct: 1.21, volume: '55.1M', marketCap: '3.0T', marketCapCategory: 'Large', aiScore: 85, signal: 'Buy', sparkline: [50,48,52,55,53,58,60,57,62,65], pe: 32.4 },
   { ticker: 'MSFT', company: 'Microsoft Corp', sector: 'Technology', price: 412.35, change: -1.24, changePct: -0.30, volume: '25.3M', marketCap: '3.1T', marketCapCategory: 'Large', aiScore: 92, signal: 'Hold', sparkline: [60,62,58,55,57,54,56,53,55,52], pe: 35.1 },
   { ticker: 'GOOGL', company: 'Alphabet Inc', sector: 'Technology', price: 176.82, change: 1.41, changePct: 0.80, volume: '28.5M', marketCap: '2.2T', marketCapCategory: 'Large', aiScore: 83, signal: 'Buy', sparkline: [45,47,44,48,50,49,52,51,53,55], pe: 25.6 },
@@ -110,26 +112,9 @@ const ALL_STOCKS: Stock[] = [
   { ticker: 'CRM', company: 'Salesforce Inc', sector: 'Technology', price: 288.40, change: 4.33, changePct: 1.52, volume: '6.2M', marketCap: '280B', marketCapCategory: 'Large', aiScore: 80, signal: 'Buy', sparkline: [48,50,49,52,51,54,53,56,55,58], pe: 32.1 },
 ];
 
-/* ────────────────────── portfolio holdings ────────────────────── */
+/* ────────────────────── transactions fallback ────────────────────── */
 
-const PORTFOLIO_HOLDINGS: PortfolioHolding[] = [
-  { ticker: 'NVDA', shares: 50, avgCost: 142.50, currentPrice: 892.10, totalValue: 44605, pl: 37480, plPct: 525.6, sector: 'Technology' },
-  { ticker: 'AAPL', shares: 100, avgCost: 165.20, currentPrice: 195.64, totalValue: 19564, pl: 3044, plPct: 18.4, sector: 'Technology' },
-  { ticker: 'MSFT', shares: 40, avgCost: 325.10, currentPrice: 412.35, totalValue: 16494, pl: 3490, plPct: 26.8, sector: 'Technology' },
-  { ticker: 'AMD', shares: 80, avgCost: 142.00, currentPrice: 168.20, totalValue: 13456, pl: 2096, plPct: 18.4, sector: 'Technology' },
-  { ticker: 'GOOGL', shares: 50, avgCost: 155.30, currentPrice: 176.82, totalValue: 8841, pl: 1076, plPct: 13.8, sector: 'Technology' },
-  { ticker: 'AMZN', shares: 35, avgCost: 178.50, currentPrice: 198.45, totalValue: 6946, pl: 698, plPct: 11.2, sector: 'Consumer Cyclical' },
-  { ticker: 'META', shares: 12, avgCost: 485.20, currentPrice: 502.30, totalValue: 6028, pl: 205, plPct: 3.5, sector: 'Technology' },
-  { ticker: 'JPM', shares: 25, avgCost: 195.30, currentPrice: 242.15, totalValue: 6054, pl: 1171, plPct: 24.0, sector: 'Finance' },
-  { ticker: 'LLY', shares: 8, avgCost: 520.00, currentPrice: 692.30, totalValue: 5538, pl: 1378, plPct: 33.1, sector: 'Healthcare' },
-  { ticker: 'V', shares: 15, avgCost: 255.00, currentPrice: 278.90, totalValue: 4184, pl: 359, plPct: 9.4, sector: 'Finance' },
-  { ticker: 'NFLX', shares: 6, avgCost: 580.00, currentPrice: 625.80, totalValue: 3755, pl: 275, plPct: 7.9, sector: 'Consumer Cyclical' },
-  { ticker: 'CASH', shares: 0, avgCost: 0, currentPrice: 1, totalValue: 18500, pl: 0, plPct: 0, sector: 'Cash' },
-];
-
-/* ────────────────────── transactions ────────────────────── */
-
-const TRANSACTIONS: Transaction[] = [
+const TRANSACTIONS_FALLBACK: Transaction[] = [
   { id: 1, date: '2025-01-15', type: 'Buy', ticker: 'NVDA', shares: 10, price: 875.20, total: 8752.00 },
   { id: 2, date: '2025-01-14', type: 'Sell', ticker: 'TSLA', shares: 15, price: 248.75, total: 3731.25 },
   { id: 3, date: '2025-01-12', type: 'Buy', ticker: 'LLY', shares: 3, price: 665.00, total: 1995.00 },
@@ -346,7 +331,7 @@ const NEWS_ARTICLES: NewsArticle[] = [
 
 /* ────────────────────── market indices ────────────────────── */
 
-let marketIndices: MarketIndex[] = [
+const marketIndices: MarketIndex[] = [
   { name: 'S&P 500', value: 5891.34, change: 49.67, changePct: 0.85, history: [5750,5780,5760,5800,5820,5790,5810,5840,5830,5850,5840,5891] },
   { name: 'NASDAQ', value: 18947.26, change: 210.32, changePct: 1.12, history: [18200,18400,18300,18500,18600,18500,18700,18800,18700,18850,18800,18947] },
   { name: 'DOW', value: 43219.77, change: 146.21, changePct: 0.34, history: [42500,42700,42600,42800,42900,42850,43000,43100,43050,43150,43100,43220] },
@@ -356,20 +341,26 @@ let marketIndices: MarketIndex[] = [
 
 function checkApiKey(provider: 'finnhub' | 'news' | 'openai', functionName: string): void {
   if (hasApiKey(provider)) {
-    console.log(`[${functionName}] Would call ${provider} API with key: ***`);
+    console.log(`[${functionName}] Would call API with key: ${hasApiKey(provider) ? '***' : 'none'}`);
   }
+}
+
+/* deterministic pseudo-random: same seed → same sequence.
+   Used to generate realistic-but-stable performance curves.   */
+function seededRandom(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
 }
 
 /* ────────────────────── exported functions ────────────────────── */
 
 export function getMarketOverview(): MarketIndex[] {
   checkApiKey('finnhub', 'getMarketOverview');
-  return marketIndices.map((m) => ({
-    ...m,
-    value: m.value + (Math.random() - 0.5) * 5,
-    change: m.change + (Math.random() - 0.5) * 2,
-    changePct: m.changePct + (Math.random() - 0.5) * 0.05,
-  }));
+  // Return stable values — no random jitter
+  return marketIndices.map((m) => ({ ...m }));
 }
 
 export function getPortfolioData(): {
@@ -381,20 +372,60 @@ export function getPortfolioData(): {
   aiSignalsActive: number;
 } {
   checkApiKey('finnhub', 'getPortfolioData');
-  const holdings = PORTFOLIO_HOLDINGS.map((h) => ({
-    ...h,
-    currentPrice: h.ticker === 'CASH' ? 1 : h.currentPrice + (Math.random() - 0.5) * 2,
-  }));
-  const totalValue = holdings.reduce((sum, h) => sum + h.totalValue, 0);
-  const dayGain = holdings
-    .filter((h) => h.ticker !== 'CASH')
-    .reduce((sum, h) => sum + h.shares * (Math.random() - 0.4) * 2, 0);
+
+  const userPositions = getUserPortfolio();
+  const buyingPower = 10000;
+
+  if (userPositions.length === 0) {
+    return {
+      holdings: [],
+      totalValue: 0,
+      dayGain: 0,
+      dayGainPct: 0,
+      buyingPower,
+      aiSignalsActive: AI_SIGNALS.filter((s) => s.type === 'Buy').length,
+    };
+  }
+
+  let totalValue = 0;
+  let dayGain = 0;
+
+  const holdings: PortfolioHolding[] = userPositions.map((pos) => {
+    const stock = ALL_STOCKS.find(
+      (s) => s.ticker.toUpperCase() === pos.ticker.toUpperCase()
+    );
+
+    const currentPrice = stock ? stock.price : 0;
+    const sector = stock ? stock.sector : 'Unknown';
+    const company = stock ? stock.company : pos.ticker;
+    const totalHoldingValue = pos.shares * currentPrice;
+    const pl = (currentPrice - pos.avgCost) * pos.shares;
+    const plPct = pos.avgCost > 0 ? ((currentPrice - pos.avgCost) / pos.avgCost) * 100 : 0;
+    // Stable day gain based on the stock's change percentage
+    const holdingDayGain = stock ? pos.shares * stock.change : 0;
+
+    totalValue += totalHoldingValue;
+    dayGain += holdingDayGain;
+
+    return {
+      ticker: pos.ticker.toUpperCase(),
+      company,
+      shares: pos.shares,
+      avgCost: pos.avgCost,
+      currentPrice,
+      totalValue: totalHoldingValue,
+      pl,
+      plPct,
+      sector,
+    };
+  });
+
   return {
     holdings,
     totalValue,
     dayGain,
     dayGainPct: (dayGain / (totalValue - dayGain)) * 100,
-    buyingPower: holdings.find((h) => h.ticker === 'CASH')?.totalValue || 18500,
+    buyingPower,
     aiSignalsActive: AI_SIGNALS.filter((s) => s.type === 'Buy').length,
   };
 }
@@ -405,23 +436,16 @@ export function getWatchlist(): Stock[] {
   return watchlistTickers
     .map((t) => ALL_STOCKS.find((s) => s.ticker === t)!)
     .filter(Boolean)
-    .map((s) => ({
-      ...s,
-      price: s.price + (Math.random() - 0.5) * 3,
-      change: s.change + (Math.random() - 0.5) * 1.5,
-    }));
+    .map((s) => ({ ...s })); // stable — no random jitter
 }
 
 export function getStockData(ticker?: string): Stock[] {
   checkApiKey('finnhub', 'getStockData');
   if (ticker) {
     const found = ALL_STOCKS.find((s) => s.ticker.toLowerCase() === ticker.toLowerCase());
-    return found ? [found] : [];
+    return found ? [{ ...found }] : [];
   }
-  return ALL_STOCKS.map((s) => ({
-    ...s,
-    price: s.price + (Math.random() - 0.5) * 1,
-  }));
+  return ALL_STOCKS.map((s) => ({ ...s })); // stable — no random jitter
 }
 
 export function getNews(category?: string): NewsArticle[] {
@@ -442,10 +466,8 @@ export function markArticleRead(id: number): void {
 
 export function getAISignals(): AISignal[] {
   checkApiKey('openai', 'getAISignals');
-  return AI_SIGNALS.map((s) => ({
-    ...s,
-    confidence: Math.min(99, Math.max(50, s.confidence + Math.floor((Math.random() - 0.5) * 4))),
-  }));
+  // Stable — no random jitter
+  return AI_SIGNALS.map((s) => ({ ...s }));
 }
 
 export function getScreenedStocks(filters: ScreenerFilters = {}): Stock[] {
@@ -474,12 +496,36 @@ export function getScreenedStocks(filters: ScreenerFilters = {}): Stock[] {
   return result;
 }
 
+/** Generate transactions from the user's portfolio positions.
+ *  If the portfolio has been modified by the user, return Buy transactions
+ *  derived from each position. Otherwise return the fallback set.  */
 export function getTransactions(typeFilter?: string): Transaction[] {
   checkApiKey('finnhub', 'getTransactions');
-  if (typeFilter && typeFilter !== 'All') {
-    return TRANSACTIONS.filter((t) => t.type === typeFilter);
+
+  const userModified = hasUserModifiedPortfolio();
+
+  let txs: Transaction[];
+
+  if (userModified) {
+    // Generate Buy transactions from current positions
+    const positions = getUserPortfolio();
+    txs = positions.map((pos, idx) => ({
+      id: idx + 1,
+      date: pos.addedAt.slice(0, 10),
+      type: 'Buy' as const,
+      ticker: pos.ticker.toUpperCase(),
+      shares: pos.shares,
+      price: pos.avgCost,
+      total: pos.shares * pos.avgCost,
+    }));
+  } else {
+    txs = [...TRANSACTIONS_FALLBACK];
   }
-  return TRANSACTIONS;
+
+  if (typeFilter && typeFilter !== 'All') {
+    return txs.filter((t) => t.type === typeFilter);
+  }
+  return txs;
 }
 
 /* ────────────────────── portfolio performance data ────────────────────── */
@@ -492,13 +538,44 @@ export function getPortfolioPerformance(timeframe: string) {
     timeframe === '3M' ? 90 :
     timeframe === '1Y' ? 365 : 30;
 
-  const base = 235000;
+  // Build a deterministic performance curve based on the user's actual holdings.
+  // We compute a weighted average of each holding's changePct to set the trend direction.
+  const portfolio = getPortfolioData();
+  const holdings = portfolio.holdings;
+
+  let weightedReturn = 0;
+  let totalWeight = 0;
+  holdings.forEach((h) => {
+    const stock = ALL_STOCKS.find((s) => s.ticker === h.ticker);
+    if (stock) {
+      const weight = h.totalValue;
+      weightedReturn += stock.changePct * weight;
+      totalWeight += weight;
+    }
+  });
+
+  // Normalised daily drift (annualised / 365)
+  const drift = totalWeight > 0 ? (weightedReturn / totalWeight) / 365 * 2.5 : 0.0003;
+  const base = Math.max(10000, portfolio.totalValue * 0.95);
+
+  const rng = seededRandom(42);
+
   return Array.from({ length: points }, (_, i) => {
-    const drift = 0.0003;
-    const volatility = 0.008;
-    const randomWalk = Array.from({ length: i + 1 }, () => (Math.random() - 0.5 + drift) * volatility * base);
-    const value = base + randomWalk.reduce((a, b) => a + b, 0);
-    const spValue = base * (0.98 + (i / points) * 0.05 + (Math.random() - 0.5) * 0.02);
+    // Deterministic random walk
+    let walkSum = 0;
+    for (let j = 0; j <= i; j++) {
+      walkSum += (rng() - 0.5 + drift) * 0.008 * base;
+    }
+    const value = base + walkSum;
+
+    // S&P 500 benchmark — slightly underperforms the portfolio
+    const spRng = seededRandom(123);
+    let spWalk = 0;
+    for (let j = 0; j <= i; j++) {
+      spWalk += (spRng() - 0.5 + drift * 0.6) * 0.006 * base;
+    }
+    const spValue = base + spWalk;
+
     return {
       label: timeframe === '1D' ? `${i}:00` : `D${i + 1}`,
       value: Math.round(value),
@@ -508,7 +585,9 @@ export function getPortfolioPerformance(timeframe: string) {
 }
 
 export function getSectorAllocation() {
-  const holdings = getPortfolioData().holdings.filter((h) => h.ticker !== 'CASH');
+  const holdings = getPortfolioData().holdings;
+  if (holdings.length === 0) return [];
+
   const total = holdings.reduce((s, h) => s + h.totalValue, 0);
   const sectorMap: Record<string, number> = {};
   holdings.forEach((h) => {
@@ -527,7 +606,9 @@ export function getSectorAllocation() {
 }
 
 export function getStockAllocation() {
-  const holdings = getPortfolioData().holdings.filter((h) => h.ticker !== 'CASH');
+  const holdings = getPortfolioData().holdings;
+  if (holdings.length === 0) return [];
+
   const total = holdings.reduce((s, h) => s + h.totalValue, 0);
   return holdings
     .map((h) => ({ name: h.ticker, value: Math.round((h.totalValue / total) * 100) }))
@@ -562,6 +643,14 @@ export function getAIResponse(message: string): { text: string; type?: 'stock' |
 
   if (lower.includes('portfolio') || lower.includes('holding') || lower.includes('my account')) {
     const pd = getPortfolioData();
+    const topHoldings = pd.holdings
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 3);
+
+    const holdingsText = topHoldings.length > 0
+      ? topHoldings.map((h, i) => `${i + 1}. ${h.ticker} — $${h.totalValue.toLocaleString()} (${((h.totalValue / pd.totalValue) * 100).toFixed(1)}% allocation)`).join('\n')
+      : 'No holdings yet. Add your first position!';
+
     return {
       type: 'portfolio',
       text: `**Portfolio Summary**
@@ -569,15 +658,13 @@ export function getAIResponse(message: string): { text: string; type?: 'stock' |
 - **Total Value**: $${pd.totalValue.toLocaleString()}
 - **Day Gain**: $${pd.dayGain.toFixed(2)} (${pd.dayGainPct.toFixed(2)}%)
 - **Buying Power**: $${pd.buyingPower.toLocaleString()}
-- **Active Positions**: ${pd.holdings.length - 1}
+- **Active Positions**: ${pd.holdings.length}
 - **AI Buy Signals**: ${pd.aiSignalsActive}
 
 **Top Holdings**:
-1. NVDA — $44,605 (52.1% allocation)
-2. AAPL — $19,564 (22.8%)
-3. MSFT — $16,494 (19.2%)
+${holdingsText}
 
-**⚠️ Risk Alert**: Your Technology allocation is at 58%. Consider rebalancing to stay diversified.`,
+${pd.holdings.length > 0 ? '**⚠️ Tip**: Use the Portfolio page to add, edit, or remove positions anytime.' : ''}`,
     };
   }
 
@@ -652,8 +739,12 @@ Try asking me about a specific stock or use the Screener to find opportunities m
 Ask me about any ticker for a full breakdown!`,
   ];
 
+  // Use a simple hash of the message to pick a stable response
+  const hash = message.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const index = hash % genericResponses.length;
+
   return {
     type: 'generic',
-    text: genericResponses[Math.floor(Math.random() * genericResponses.length)],
+    text: genericResponses[index],
   };
 }
